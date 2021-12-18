@@ -3,16 +3,16 @@
 
 The name ***Wintermelon*** is an acronym with 2 possible expansions:
 
-- (**WIN**)dows (**T**)en & (**E**)leven (**R**)endering of (**M**)irrored (**E**)vent-triggered (**L**)ockscreens (**O**)n (**N**)on-main displays
+- **WIN**dows **T**en & **E**leven **R**endering of **M**irrored **E**vent-triggered **L**ockscreens **O**n **N**on-main displays
 
-- (**WIN**)dows (**T**)en & (**E**)leven (**R**)estorer of (**M**)ultiple (**E**)quivalent (**L**)ockscreens (**O**)n (**N**)on-main displays
+- **WIN**dows **T**en & **E**leven **R**estorer of **M**ultiple **E**quivalent **L**ockscreens **O**n **N**on-main displays
 
-Here's a demo showing Wintermelon in action:
+Here's a demo showing Wintermelon in action on Windows 11:
 ![Dual lockscreen on laptop screen and external display implemented on a Win11 machine using Wintermelon](Wintermelon_demo.jpg "Dual lockscreen using Wintermelon")
 
 
 ## How it works ##
-In Windows 10 & 11, lockscreen will appear on multiple displays only if the display projection mode (accessed by pressing Win+P hotkey) is set to "Duplicate". Most users will typically use primary/secondary (main/non-main) monitors in "Extend" mode to multitask between various opened application windows. Wintermelon sets up a scheduled task that monitors for lock/unlock events. When a lock event is detected the projection mode is switched to "Duplicate" which will duplicate the main display's lockscreen across all non-main displays and when an unlock event is triggered the projection mode reverts to "Extend" mode.
+In Windows 10 & 11, lockscreen will appear on multiple displays only if the display projection mode (accessed by pressing Win+P hotkey) is set to "Duplicate". Most users will typically use primary/secondary (main/non-main) monitors in "Extend" mode to multitask between various opened application windows. Wintermelon sets up a scheduled task that monitors for lock/unlock events. When a lock event is detected the projection mode is switched to "Duplicate" which will replicate the main display's lockscreen across all non-main displays and when an unlock event is triggered the projection mode will revert to "Extend" mode.
 Before switching to "Duplicate" mode the position of opened application windows on the desktop are recorded since the duplication of displays will cause all windows to collapse on to the primary/main display. When reverting to "Extend" mode following the unlock event the recorded positions are retrieved and used to reposition the application windows to their original state.
 
 
@@ -21,9 +21,9 @@ Wintermelon is a C# project relying on .NET Core 3.1 and it was originally devel
 
 To build Wintermelon executable you'll need:
 
-1) .NET Core 3.1
+1) [.NET Core 3.1](https://dotnet.microsoft.com/en-us/download/dotnet/3.1)
 
-2) Visual Studio
+2) [Visual Studio](https://visualstudio.microsoft.com/vs/older-downloads/)
 
 3) Windows machine
 
