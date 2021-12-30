@@ -1,5 +1,5 @@
 # Wintermelon
-***Wintermelon*** is a C# workaround that emulates dual/multi monitor lockscreen feature in Windows 10/11. The ability to duplicate lockscreen existed until Windows 7 but Windows 10 & 11 have chosen to forgo this feature by displaying the lockscreen only on primary (or main) display while the secondary (or non-main) displays go black.
+***Wintermelon*** is a C# console app-based workaround that emulates dual/multi monitor lockscreen feature in Windows 10/11. The ability to duplicate lockscreen existed until Windows 7 but Windows 10 & 11 have chosen to forgo this feature by displaying the lockscreen only on primary (or main) display while the secondary (or non-main) displays go black.
 
 The name ***Wintermelon*** is an acronym with 2 possible expansions:
 
@@ -13,7 +13,7 @@ Here's a demo showing Wintermelon in action on Windows 11:
 
 ## How it works ##
 In Windows 10 & 11, lockscreen will appear on multiple displays only if the display projection mode (accessed by pressing Win+P hotkey) is set to "Duplicate". Most users will typically use primary/secondary (main/non-main) monitors in "Extend" mode to multitask between various opened application windows. Wintermelon sets up a scheduled task that monitors for lock/unlock events. When a lock event is detected the projection mode is switched to "Duplicate" which will replicate the main display's lockscreen across all non-main displays and when an unlock event is triggered the projection mode will revert to "Extend" mode.
-Before switching to "Duplicate" mode the position of opened application windows on the desktop are recorded since the duplication of displays will cause all windows to collapse on to the primary/main display. When reverting to "Extend" mode following the unlock event the recorded positions are retrieved and used to reposition the application windows to their original state.
+Before switching to "Duplicate" mode the position of opened application windows on the desktop are recorded since the duplication of displays will cause all windows to move over to the primary/main display. When reverting to "Extend" mode following the unlock event the recorded positions are retrieved and used to reposition/restore the application windows to their original state.
 
 
 ## Requirements ##
@@ -21,26 +21,44 @@ Wintermelon is a C# project relying on .NET Core 3.1 and it was originally devel
 
 To build Wintermelon executable you'll need:
 
-1) [.NET Core 3.1](https://dotnet.microsoft.com/en-us/download/dotnet/3.1)
+1) [.NET Core SDK 3.1](https://dotnet.microsoft.com/en-us/download/dotnet/3.1)
 
-2) [Visual Studio](https://visualstudio.microsoft.com/vs/older-downloads/)
+2) [Visual Studio IDE](https://visualstudio.microsoft.com/vs/older-downloads/)
 
-3) Windows machine
+3) Windows PC
 
 To test and install Wintermelon you'll need:
 
-1) Windows 10 or Windows 11 machine
+1) Windows 10 or Windows 11 PC
 
-2) PowerShell
+2) .NET Core Runtime 3.1
+
+3) PowerShell
+
+4) Lockscreen enabled via *Personalize* settings menu
 
 The installer for the C# executable is a PowerShell script which will need to be executed by running it within a PowerShell terminal launched using administrator mode.
 
 
+## Lockscreen personalization settings ##
+To enable lockscreen for primary display in Windows 10 & 11:
+
+1) Right click on desktop and choose *Personalize*.
+
+2) Search for *Lock screen* setting. Choose appropriate lockscreen background. Pick *Windows spotlight* for background if you want Windows to dynamically update lockscreen background.
+
+3) In Windows 11, turn on the option *Show the lock screen background picture on the sign-in screen*.
+
+4) Go to *Screen timeout settings* and set the sleep setting *When plugged in, turn off after* to *Never* if you don't want the lockscreen to timeout.
+
+5) When doing a sign-in the lockscreen background typically becomes blurred. Follow [these instructions](https://www.tenforums.com/tutorials/124993-enable-disable-acrylic-blur-effect-sign-screen-windows-10-a.html) to turn off this acrylic blur effect.
+
+
 ## Building the executable ##
 
-1) Open the solution file *Wintermelon.sln* in Visual Studio. The source code resides in *Program.cs*.
+1) Open the solution file *Wintermelon.sln* in Visual Studio. The C# source code resides in *Program.cs*.
 
-2) Build the solution by choosing **Build --> Build Solution (Ctrl+Shift+B)** in the menu bar.
+2) Build the solution by choosing **Build --> Build Solution (Ctrl+Shift+B)** from the menu bar.
 
 3) If there are no build errors then select **Build --> Publish Wintermelon** and pass the following publish information:
 
@@ -71,7 +89,7 @@ The installer for the C# executable is a PowerShell script which will need to be
 
 4) Press Publish button which will generate the executable **Wintermelon.exe** at the path *bin\Release\netcoreapp3.1\publish\Wintermelon.exe* relative to the C# solution folder.
 
-This executable handles the switching of projection mode between Duplicate and Extend modes and does recording, retrieval of window positions from a text file saved at *C:\Users\Your_Username\AppData\Local\Wintermelon\winpos.txt*.
+This executable handles the switching of projection mode between Duplicate and Extend modes during lock/unlock events and does recording, retrieval of window positions from a text file saved at *C:\Users\Your_Username\AppData\Local\Wintermelon\winpos.txt*.
 
 ## Using Wintermelon ##
 To monitor lock/unlock event and switch the projection mode two separate scheduled tasks will need to be registered with the Windows Task Scheduler. These tasks are:
@@ -82,7 +100,7 @@ To monitor lock/unlock event and switch the projection mode two separate schedul
 The PowerShell scripts *install_wintermelon.ps1* and *uninstall_wintermelon.ps1* will need to be executed to register or unregister the aforementioned tasks, respectively.
 
 ### Registering the Scheduled tasks ###
-- Open PowerShell by going to Start Menu, searching for Windows PowerShell and choosing "Run As Administrator" from right lick context menu.
+- Open PowerShell by going to Start Menu, searching for Windows PowerShell and choosing "Run As Administrator" from right click context menu.
 
 - To register the tasks run the following command
 
