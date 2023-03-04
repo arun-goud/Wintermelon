@@ -15,7 +15,7 @@
 
 # Step 1
 # auditpol /set /subcategory:"Other Logon/Logoff Events" /success:enable /failure:enable
-auditpol /set /subcategory:"0CCE921C-69AE-11D9-BED3-505054503030" /success:enable /failure:enable
+auditpol /set /subcategory:{0CCE921C-69AE-11D9-BED3-505054503030} /success:enable /failure:enable
 
 # Step 2
 $scriptdir = Split-Path -Parent $PSCommandPath
