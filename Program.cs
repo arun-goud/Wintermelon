@@ -1,30 +1,29 @@
-﻿
 /*
 ***************************************************************************
-Author           :  arun-goud
-Github project   :  Wintermelon 
-                    (WIN)dows (T)en & (E)leven (R)endering of (M)irrored (E)vent-triggered (L)ockscreens (O)n (N)on-main displays
-Description      :  C# program for Win 10 & 11 that toggles projection mode
-                    between duplicate and extend setting.
-                    Accepts optional arguments 'save' and 'restore' that 
-                    store and retrieve positions of open windows, respectively,
-                    using a settings file at
-                    C:\Users\Username\AppData\Local\Wintermelon\winpos.txt
-Use case         :  Allows lockscreen mirroring by registering as a task
-                    with task scheduler and using lock, unlock events as
-                    the task triggers.
-Created on       :  2020/06/19
-Last modified on :  2021/07/05
-References       :  Code snippets were borrowed from below URLs
-                    https://docs.microsoft.com/en-us/windows/win32/gdi/positioning-objects-on-multiple-display-monitors
-                    https://docs.microsoft.com/en-us/archive/blogs/davidrickard/saving-window-size-and-location-in-wpf-and-winforms
-                    https://bytes.com/topic/net/answers/855274-getting-child-windows-using-process-getprocess
-                    https://stackoverflow.com/questions/15448266/how-do-you-find-what-windowhandle-takes-process-ownership-and-get-the-handle
-                    http://pinvoke.net/default.aspx/user32.EnumDesktopWindows
-                    https://stackoverflow.com/questions/19867402/how-can-i-use-enumwindows-to-find-windows-with-a-specific-caption-title
-                    https://stackoverflow.com/questions/38460253/how-to-use-system-windows-forms-in-net-core-class-library
-                    https://github.com/BiNZGi/WinPos
+Project          :  Wintermelon (modernized rebuild, .NET 8)
+Original author  :  arun-goud  (https://github.com/arun-goud/Wintermelon)
+                    (WIN)dows (T)en & (E)leven (R)endering of (M)irrored
+                    (E)vent-triggered (L)ockscreens (O)n (N)on-main displays
+Description      :  Console-style Win 10 & 11 helper that toggles the display
+                    projection mode between Duplicate (Clone) and Extend.
+                    Accepts a single argument:
+                      save    -> record positions of open windows, then CLONE
+                                 displays (so the lock screen mirrors onto all
+                                 monitors).
+                      restore -> EXTEND displays, then move the windows that
+                                 were on non-primary monitors back to where
+                                 they were before the clone.
+                    Window positions are stored at
+                    %LOCALAPPDATA%\Wintermelon\winpos.txt
+Use case         :  Registered as two Task Scheduler tasks triggered by
+                    workstation lock / unlock, this makes the Windows lock
+                    screen appear on every monitor instead of just the primary.
 
+Changes vs. the original:
+  - Retargeted from .NET Core 3.1 to net8.0-windows.
+  - OutputType WinExe so no console window flashes on lock/unlock.
+  - Hardened the window-enumeration callback with try/catch so a single
+    inaccessible (e.g. elevated) process cannot abort the whole pass.
 ***************************************************************************
 */
 
@@ -41,13 +40,13 @@ namespace Wintermelon
 {
     class Program
     {
-        // PInvoke imports for controlling Window placement
+        // PInvoke imports for controlling window placement
         [DllImport("user32.dll")]
         private static extern bool SetWindowPlacement(IntPtr hWnd, [In] ref WINDOWPLACEMENT lpwndpl);
         [DllImport("user32.dll")]
         private static extern bool GetWindowPlacement(IntPtr hWnd, out WINDOWPLACEMENT lpwndpl);
 
-        // PInvoke imports to get handles to multiple windows having the same process name
+        // PInvoke imports to enumerate top-level windows
         public delegate bool EnumDelegate(IntPtr hWnd, int lParam);
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -60,6 +59,7 @@ namespace Wintermelon
         public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
         [DllImport("dwmapi.dll")]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, DwmWindowAttribute dwAttribute, out bool pvAttribute, int cbAttribute);
+
         [Flags]
         public enum DwmWindowAttribute
         {
@@ -81,10 +81,10 @@ namespace Wintermelon
             DWMWA_LAST
         }
 
-        // Display switch imports
+        // Display projection switch
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern long SetDisplayConfig(uint numPathArrayElements,
-        IntPtr pathArray, uint numModeArrayElements, IntPtr modeArray, uint flags);
+            IntPtr pathArray, uint numModeArrayElements, IntPtr modeArray, uint flags);
 
         public enum SDC_FLAGS
         {
@@ -97,25 +97,25 @@ namespace Wintermelon
 
         public static void CloneDisplays()
         {
-            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint) SDC_FLAGS.SDC_APPLY | (uint) SDC_FLAGS.SDC_TOPOLOGY_CLONE));
+            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint)SDC_FLAGS.SDC_APPLY | (uint)SDC_FLAGS.SDC_TOPOLOGY_CLONE));
         }
 
         public static void ExtendDisplays()
         {
-            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint) SDC_FLAGS.SDC_APPLY | (uint) SDC_FLAGS.SDC_TOPOLOGY_EXTEND));
+            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint)SDC_FLAGS.SDC_APPLY | (uint)SDC_FLAGS.SDC_TOPOLOGY_EXTEND));
         }
 
         public static void ExternalDisplay()
         {
-            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint) SDC_FLAGS.SDC_APPLY | (uint) SDC_FLAGS.SDC_TOPOLOGY_EXTERNAL));
+            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint)SDC_FLAGS.SDC_APPLY | (uint)SDC_FLAGS.SDC_TOPOLOGY_EXTERNAL));
         }
 
         public static void InternalDisplay()
         {
-            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint) SDC_FLAGS.SDC_APPLY | (uint) SDC_FLAGS.SDC_TOPOLOGY_INTERNAL));
+            SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, ((uint)SDC_FLAGS.SDC_APPLY | (uint)SDC_FLAGS.SDC_TOPOLOGY_INTERNAL));
         }
 
-        // RECT structure required by WINDOWPLACEMENT structure
+        // RECT structure required by WINDOWPLACEMENT
         [Serializable]
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
@@ -133,12 +133,12 @@ namespace Wintermelon
             }
             public override string ToString()
             {
-                return "(" + this.Left.ToString() + "," + this.Top.ToString() + "," + 
+                return "(" + this.Left.ToString() + "," + this.Top.ToString() + "," +
                     this.Right.ToString() + "," + this.Bottom.ToString() + ")";
             }
         }
 
-        // POINT structure required by WINDOWPLACEMENT structure
+        // POINT structure required by WINDOWPLACEMENT
         [Serializable]
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT
@@ -169,7 +169,7 @@ namespace Wintermelon
             public RECT normalPosition;
             public override string ToString()
             {
-                return "Length=" + length.ToString() + "\tFlags=" + flags.ToString()+"\tCmd="+showCmd.ToString()+
+                return "Length=" + length.ToString() + "\tFlags=" + flags.ToString() + "\tCmd=" + showCmd.ToString() +
                     "\tMin=" + minPosition.ToString() + "\tMax=" + maxPosition.ToString() + "\tRect=" + normalPosition.ToString();
             }
         }
@@ -178,7 +178,7 @@ namespace Wintermelon
         {
             if (args.Length == 0)
             {
-                //*Console.WriteLine("Usage: Wintermelon [save | restore]");
+                // Usage: Wintermelon [save | restore]
                 return;
             }
 
@@ -189,164 +189,142 @@ namespace Wintermelon
 
             Screen[] screens = Screen.AllScreens;
 
-            // Get collection of .exe processes with top-level desktop windows and save to handleInfo[]
+            // Collect visible top-level .exe windows and their placements.
             var procSettings = new List<string>();
             var handleInfo = new List<IntPtr>();
             EnumDelegate filter = delegate (IntPtr hWnd, int lParam)
             {
-                StringBuilder strbTitle = new StringBuilder(255);
-                int nLength = GetWindowText(hWnd, strbTitle, strbTitle.Capacity + 1);
-                string strTitle = strbTitle.ToString();
-
-                if (IsWindowVisible(hWnd) && string.IsNullOrEmpty(strTitle) == false)
+                try
                 {
-                    //procSettings.Add(strTitle);
-                    WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
-                    wp.length = Marshal.SizeOf(wp);
-                    GetWindowPlacement(hWnd, out wp);
-                    
-                    uint pid = 0;
-                    GetWindowThreadProcessId(hWnd, out pid);
+                    StringBuilder strbTitle = new StringBuilder(255);
+                    GetWindowText(hWnd, strbTitle, strbTitle.Capacity + 1);
+                    string strTitle = strbTitle.ToString();
 
-                    //if (wp.flags != 0 && wp.showCmd != 1)
-                    DwmGetWindowAttribute(hWnd, DwmWindowAttribute.DWMWA_CLOAKED, out bool isCloaked, Marshal.SizeOf(typeof(bool)));
-                    if (!isCloaked) // Gets rid of WinRT apps such as Microsoft Store which remain cloaked
+                    if (IsWindowVisible(hWnd) && string.IsNullOrEmpty(strTitle) == false)
                     {
-                        string exeName = Process.GetProcessById((int)pid).MainModule.FileName;
-                        if (exeName.ToLower().EndsWith(".exe")) // Save only .exe generated window positions
+                        WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
+                        wp.length = Marshal.SizeOf(wp);
+                        GetWindowPlacement(hWnd, out wp);
+
+                        uint pid = 0;
+                        GetWindowThreadProcessId(hWnd, out pid);
+
+                        // Skip cloaked windows (e.g. background WinRT/UWP apps like the Store)
+                        DwmGetWindowAttribute(hWnd, DwmWindowAttribute.DWMWA_CLOAKED, out bool isCloaked, Marshal.SizeOf(typeof(bool)));
+                        if (!isCloaked)
                         {
-                            var screen = Screen.FromHandle(hWnd);
-                            //Console.WriteLine(screen);
-                            procSettings.Add("Title=" + strTitle + "\tPID=" + pid.ToString() + "\tID=" + hWnd.ToString() + "\tName=" + exeName + 
-                                "\t" + wp.ToString() + "\tPrimary=" + screen.Primary.ToString() + "\tDisplay=" + screen.DeviceName);
-                            handleInfo.Add(hWnd);
+                            string exeName = Process.GetProcessById((int)pid).MainModule.FileName;
+                            if (exeName.ToLower().EndsWith(".exe")) // Save only .exe-generated window positions
+                            {
+                                var screen = Screen.FromHandle(hWnd);
+                                procSettings.Add("Title=" + strTitle + "\tPID=" + pid.ToString() + "\tID=" + hWnd.ToString() + "\tName=" + exeName +
+                                    "\t" + wp.ToString() + "\tPrimary=" + screen.Primary.ToString() + "\tDisplay=" + screen.DeviceName);
+                                handleInfo.Add(hWnd);
+                            }
                         }
                     }
                 }
+                catch
+                {
+                    // Inaccessible process (e.g. elevated/protected) — skip this window and continue.
+                }
                 return true;
             };
-            // Enumerate visible windows using filter defined above
+
+            // Enumerate visible windows using the filter defined above
             if (!EnumDesktopWindows(IntPtr.Zero, filter, IntPtr.Zero))
             {
-                // Get the last Win32 error code
                 int nErrorCode = Marshal.GetLastWin32Error();
                 string strErrMsg = String.Format("EnumDesktopWindows failed with code {0}.", nErrorCode);
                 throw new Exception(strErrMsg);
             }
 
-            // Take appropriate action based on whether "save" or "restore" was passed in
-            // 'save' --> Save window positions and then clone displays
+            // 'save' --> save window positions, then clone displays
             if (string.Equals(args[0], "save", StringComparison.OrdinalIgnoreCase))
-            {               
-                //*Console.WriteLine("Saving window positions to {0}...", settingsFile);
+            {
                 File.WriteAllText(settingsFile, "");
-
                 foreach (var item in procSettings)
                 {
                     File.AppendAllText(settingsFile, item + "\n");
                 }
-                //*Console.WriteLine("Done.");
 
-                // Duplicate screen using DisplaySwitch.exe process (slow approach)
-                //ProcessStartInfo startInfo = new ProcessStartInfo();
-                //startInfo.FileName = @"C:\Windows\System32\DisplaySwitch.exe";
-                //startInfo.Arguments = @"/clone";
-                //Process.Start(startInfo);
-
-                // Duplicate using SetDisplayConfig() (faster approach)
                 CloneDisplays();
             }
-            // 'restore' --> Extend displays and then restore windows
+            // 'restore' --> extend displays, then restore windows
             else if (string.Equals(args[0], "restore", StringComparison.OrdinalIgnoreCase))
             {
-                // Extend using DisplaySwitch.exe process (slow approach)
-                //Process p = new Process();
-                //p.StartInfo.FileName = @"C:\Windows\System32\DisplaySwitch.exe";
-                //p.StartInfo.Arguments = @"/extend";
-                //p.Start();
-                //p.WaitForExit();
-
-                // Extend using SetDisplayConfig() (faster approach)
                 ExtendDisplays();
 
+                if (!File.Exists(settingsFile))
+                    return;
 
-                //*Console.WriteLine("Restoring window positions from {0}...", settingsFile);
-                // Read settings.txt into a dictionary with pid+"_"+ptitle serving as key
+                // Read settings file into a dictionary keyed by pid_id_title
                 var processInfo = new Dictionary<string, WINDOWPLACEMENT>();
-                System.IO.StreamReader infile = new System.IO.StreamReader(@settingsFile);
-                string line;
-                while ((line = infile.ReadLine()) != null)
+                using (System.IO.StreamReader infile = new System.IO.StreamReader(@settingsFile))
                 {
-                    if (string.IsNullOrWhiteSpace(line))
-                    { 
-                        continue;
-                    }
-                    //System.Console.WriteLine(line);
-                    var dict = line.Split('\t').Select(x => x.Split('=')).ToDictionary(x => x[0], x => x[1]);
-                    string pid = dict["PID"];
-                    string id = dict["ID"];
-                    string ptitle = dict["Title"];
-                    bool isPrimary = string.Equals(dict["Primary"], "True", StringComparison.OrdinalIgnoreCase);
-
-                    // Save only for those that are not on the primary screen
-                    if (!isPrimary)
+                    string line;
+                    while ((line = infile.ReadLine()) != null)
                     {
-                        WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
-                        wp.length = Marshal.SizeOf(wp);
-                        wp.flags = int.Parse(dict["Flags"]);
-                        wp.showCmd = int.Parse(dict["Cmd"]);
-                        var minxy = dict["Min"].Replace("(", "").Replace(")", "").Split(",");
-                        wp.minPosition = new POINT(int.Parse(minxy[0]), int.Parse(minxy[1]));
-                        var maxxy = dict["Max"].Replace("(", "").Replace(")", "").Split(",");
-                        wp.maxPosition = new POINT(int.Parse(maxxy[0]), int.Parse(maxxy[1]));
-                        var pqrs = dict["Rect"].Replace("(", "").Replace(")", "").Split(",");
-                        wp.normalPosition = new RECT(int.Parse(pqrs[0]), int.Parse(pqrs[1]),int.Parse(pqrs[2]), int.Parse(pqrs[3]));
+                        if (string.IsNullOrWhiteSpace(line))
+                            continue;
 
-                        processInfo.Add(pid + "_" + id + "_" + ptitle, wp);
-                        //Console.WriteLine("Info='{0}'", pid + "_" + id + "_" + ptitle);
+                        var dict = line.Split('\t').Select(x => x.Split('=')).ToDictionary(x => x[0], x => x[1]);
+                        string pid = dict["PID"];
+                        string id = dict["ID"];
+                        string ptitle = dict["Title"];
+                        bool isPrimary = string.Equals(dict["Primary"], "True", StringComparison.OrdinalIgnoreCase);
+
+                        // Only windows that were NOT on the primary screen need repositioning
+                        if (!isPrimary)
+                        {
+                            WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
+                            wp.length = Marshal.SizeOf(wp);
+                            wp.flags = int.Parse(dict["Flags"]);
+                            wp.showCmd = int.Parse(dict["Cmd"]);
+                            var minxy = dict["Min"].Replace("(", "").Replace(")", "").Split(",");
+                            wp.minPosition = new POINT(int.Parse(minxy[0]), int.Parse(minxy[1]));
+                            var maxxy = dict["Max"].Replace("(", "").Replace(")", "").Split(",");
+                            wp.maxPosition = new POINT(int.Parse(maxxy[0]), int.Parse(maxxy[1]));
+                            var pqrs = dict["Rect"].Replace("(", "").Replace(")", "").Split(",");
+                            wp.normalPosition = new RECT(int.Parse(pqrs[0]), int.Parse(pqrs[1]), int.Parse(pqrs[2]), int.Parse(pqrs[3]));
+
+                            processInfo.Add(pid + "_" + id + "_" + ptitle, wp);
+                        }
                     }
                 }
-                infile.Close();
-
-                //*Console.WriteLine("Restoring {0} windows", handleInfo.Count());
 
                 foreach (var handle in handleInfo)
                 {
                     StringBuilder strbTitle = new StringBuilder(255);
-                    int nLength = GetWindowText(handle, strbTitle, strbTitle.Capacity + 1);
+                    GetWindowText(handle, strbTitle, strbTitle.Capacity + 1);
                     string ptitle = strbTitle.ToString();
                     uint procid = 0;
                     GetWindowThreadProcessId(handle, out procid);
 
                     string pid = procid.ToString();
                     string id = handle.ToString();
+                    string key = pid + "_" + id + "_" + ptitle;
 
-                    // Get window positions for the processes from settings.txt, if present, and enforce them
-                    if (processInfo.ContainsKey(pid + "_" + id + "_" + ptitle))
+                    if (processInfo.ContainsKey(key))
                     {
-                        //*Console.WriteLine("Info={0}", pid + "_" + id + "_" + ptitle);
-                        // To restore maximized windows
-                        WINDOWPLACEMENT wp = processInfo[pid + "_" + id + "_" + ptitle];
+                        // First restore as a normal (non-maximized) window...
+                        WINDOWPLACEMENT wp = processInfo[key];
                         wp.length = Marshal.SizeOf(wp);
                         wp.showCmd = 1;
                         SetWindowPlacement(handle, ref wp);
 
-                        // To restore rest of them
-                        WINDOWPLACEMENT wp2 = processInfo[pid + "_" + id + "_" + ptitle];
+                        // ...then apply the saved state (handles maximized windows correctly)
+                        WINDOWPLACEMENT wp2 = processInfo[key];
                         wp2.length = Marshal.SizeOf(wp2);
                         SetWindowPlacement(handle, ref wp2);
                     }
-
                 }
-
-                //*Console.WriteLine("Done.");
             }
             else
-            {               
-                 //*Console.WriteLine("Usage: Wintermelon [save | restore]");
-                 return;                
+            {
+                // Usage: Wintermelon [save | restore]
+                return;
             }
-
         }
     }
 }

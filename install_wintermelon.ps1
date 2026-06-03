@@ -1,46 +1,132 @@
-#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    Builds Wintermelon and registers two scheduled tasks that mirror the
+    Windows lock screen onto all monitors.
 
-# PowerShell script to register Wintermelon with Windows Task Scheduler
-# by running the command below in PowerShell terminal launched in admin mode 
-# powershell -File "Path to this script"
+.DESCRIPTION
+    Registers:
+      "Wintermelon screen lock save window position clone display"
+          -> runs "Wintermelon.exe save"    on workstation LOCK
+      "Wintermelon screen unlock extend display restore window"
+          -> runs "Wintermelon.exe restore" on workstation UNLOCK
 
-# Step 1: Enable audit of lock/unlock eventIDs 4800, 4801 using secpol.msc
-# Windows search -> Local Security Policy (secpol.msc) 
-#                  -> Advanced Audit Policy Configuration 
-#                    -> System Audit Policies - Local Group Policy Object 
-#                      -> Logon/Logoff 
-#                        -> Audit Other Logon/Logoff Events = Success
-# Step 2: Set up scheduled tasks using template XML files for lock/unlock event
+    Uses native Task Scheduler SessionStateChangeTrigger (SessionLock /
+    SessionUnlock) triggers, so no Security audit-policy change is needed.
 
+.NOTES
+    Must be run from an ELEVATED PowerShell (Run as Administrator).
+        powershell -ExecutionPolicy Bypass -File .\install_wintermelon.ps1
+#>
 
-# Step 1
-# auditpol /set /subcategory:"Other Logon/Logoff Events" /success:enable /failure:enable
-auditpol /set /subcategory:{0CCE921C-69AE-11D9-BED3-505054503030} /success:enable /failure:enable
+param(
+    [switch]$SkipBuild
+)
 
-# Step 2
-$scriptdir = Split-Path -Parent $PSCommandPath
-$xml1 = $scriptdir + "\Screen_lock_Save_window_position_Clone_display.xml"
-$xml2 = $scriptdir + "\Screen_unlock_Extend_display_Restore_window.xml"
-$user = "$env:USERDOMAIN\$env:USERNAME"
-$timestamp = Get-Date -format s
+$ErrorActionPreference = 'Stop'
 
-# Customize XML1 and then register with Task Scheduler
-[xml]$schtask1 = Get-Content $xml1
-$schtask1.Task.RegistrationInfo.Date = $timestamp.ToString()
-$schtask1.Task.RegistrationInfo.Author = $user 
-$schtask1.Task.Principals.Principal.UserId = $user
-$schtask1.Task.Actions.Exec.Command = $scriptdir + "\bin\Release\netcoreapp3.1\publish\Wintermelon.exe"
-$schtask1.Save($xml1)
-Write-Host "Setting up task 1 - Wintermelon screen lock save window position clone display..."
-Register-ScheduledTask -Xml (Get-Content $xml1 | Out-String) -TaskName "Wintermelon screen lock save window position clone display" -User $user 
+# --- Require elevation -------------------------------------------------------
+$principal = New-Object Security.Principal.WindowsPrincipal(
+    [Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error "This script must be run as Administrator. Right-click PowerShell -> Run as administrator, then re-run it."
+    exit 1
+}
 
-# Customize XML2 and then register with Task Scheduler
-[xml]$schtask2 = Get-Content $xml2
-$schtask2.Task.RegistrationInfo.Date = $timestamp.ToString()
-$schtask2.Task.RegistrationInfo.Author = $user 
-$schtask2.Task.Principals.Principal.UserId = $user
-$schtask2.Task.Actions.Exec.Command = $scriptdir + "\bin\Release\netcoreapp3.1\publish\Wintermelon.exe" 
-$schtask2.Save($xml2)
-Write-Host "Setting up task 2 - Wintermelon screen unlock extend display restore window..."
-Register-ScheduledTask -Xml (Get-Content $xml2 | Out-String) -TaskName "Wintermelon screen unlock extend display restore window" -User $user 
+$scriptDir = $PSScriptRoot
+$exePath   = Join-Path $scriptDir 'bin\Release\net8.0-windows\win-x64\publish\Wintermelon.exe'
+$userId    = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 
+$lockTaskName   = 'Wintermelon screen lock save window position clone display'
+$unlockTaskName = 'Wintermelon screen unlock extend display restore window'
+
+# --- Build (publish single-file exe) ----------------------------------------
+if (-not $SkipBuild) {
+    Write-Host "Publishing Wintermelon.exe ..." -ForegroundColor Cyan
+    $proj = Join-Path $scriptDir 'Wintermelon.csproj'
+    & dotnet publish $proj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+    if ($LASTEXITCODE -ne 0) { Write-Error "dotnet publish failed."; exit 1 }
+}
+
+if (-not (Test-Path $exePath)) {
+    Write-Error "Executable not found at: $exePath`nRun without -SkipBuild, or build the project first."
+    exit 1
+}
+Write-Host "Using executable: $exePath" -ForegroundColor Green
+
+# --- Task XML templates ------------------------------------------------------
+function New-WintermelonTaskXml {
+    param(
+        [string]$Description,
+        [string]$StateChange,   # SessionLock or SessionUnlock
+        [string]$Argument,      # save or restore
+        [string]$User,
+        [string]$Command
+    )
+    @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>$User</Author>
+    <Description>$Description</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <SessionStateChangeTrigger>
+      <Enabled>true</Enabled>
+      <StateChange>$StateChange</StateChange>
+      <UserId>$User</UserId>
+    </SessionStateChangeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>$User</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT5M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$Command</Command>
+      <Arguments>$Argument</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+}
+
+$lockXml = New-WintermelonTaskXml -Description 'Wintermelon: on workstation lock, save window positions and clone displays so the lock screen shows on all monitors.' `
+    -StateChange 'SessionLock' -Argument 'save' -User $userId -Command $exePath
+
+$unlockXml = New-WintermelonTaskXml -Description 'Wintermelon: on workstation unlock, extend displays and restore window positions.' `
+    -StateChange 'SessionUnlock' -Argument 'restore' -User $userId -Command $exePath
+
+# --- Register tasks ----------------------------------------------------------
+Write-Host "Registering scheduled tasks ..." -ForegroundColor Cyan
+Register-ScheduledTask -TaskName $lockTaskName   -Xml $lockXml   -User $userId -Force | Out-Null
+Register-ScheduledTask -TaskName $unlockTaskName -Xml $unlockXml -User $userId -Force | Out-Null
+
+Write-Host ""
+Write-Host "Done. Two tasks registered:" -ForegroundColor Green
+Write-Host "  * $lockTaskName"
+Write-Host "  * $unlockTaskName"
+Write-Host ""
+Write-Host "Test it: press Win+L. The lock screen should appear on all monitors." -ForegroundColor Yellow
+Write-Host "Unlock and your windows return to their original positions (~3s)."
