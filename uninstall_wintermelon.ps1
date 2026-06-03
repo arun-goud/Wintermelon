@@ -1,25 +1,35 @@
-#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    Removes the two Wintermelon scheduled tasks.
 
-# PowerShell script to unregister Wintermelon with Windows Task Scheduler
-# in admin mode
-$task1 = "Wintermelon screen lock save window position clone display"
-$task2 = "Wintermelon screen unlock extend display restore window"
+.NOTES
+    Must be run from an ELEVATED PowerShell (Run as Administrator).
+        powershell -ExecutionPolicy Bypass -File .\uninstall_wintermelon.ps1
+#>
 
-# Unregister task1 with Task Scheduler
-Write-Host "Removing task 1 - Wintermelon screen lock save window position clone display..."
-if ($(Get-ScheduledTask -TaskName $task1 -ErrorAction SilentlyContinue).TaskName -eq $task1) {
-    Unregister-ScheduledTask -TaskName $task1 -Confirm:$false
-} else {
-    Write-Host "No such task exists."
+$ErrorActionPreference = 'Stop'
+
+$principal = New-Object Security.Principal.WindowsPrincipal(
+    [Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error "This script must be run as Administrator."
+    exit 1
 }
 
+$tasks = @(
+    'Wintermelon screen lock save window position clone display',
+    'Wintermelon screen unlock extend display restore window'
+)
 
-
-# Unregister task2 with Task Scheduler
-Write-Host "Removing task 2 - Wintermelon screen unlock extend display restore window..."
-if ($(Get-ScheduledTask -TaskName $task2 -ErrorAction SilentlyContinue).TaskName -eq $task2) {
-    Unregister-ScheduledTask -TaskName $task2 -Confirm:$false
-} else {
-    Write-Host "No such task exists."
+foreach ($t in $tasks) {
+    $existing = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+    if ($existing) {
+        Unregister-ScheduledTask -TaskName $t -Confirm:$false
+        Write-Host "Removed: $t" -ForegroundColor Green
+    } else {
+        Write-Host "Not found (already removed): $t" -ForegroundColor DarkGray
+    }
 }
 
+Write-Host ""
+Write-Host "Wintermelon tasks removed. Displays will no longer clone on lock." -ForegroundColor Yellow
