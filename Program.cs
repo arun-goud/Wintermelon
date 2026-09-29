@@ -212,7 +212,20 @@ namespace Wintermelon
                     DwmGetWindowAttribute(hWnd, DwmWindowAttribute.DWMWA_CLOAKED, out bool isCloaked, Marshal.SizeOf(typeof(bool)));
                     if (!isCloaked) // Gets rid of WinRT apps such as Microsoft Store which remain cloaked
                     {
-                        string exeName = Process.GetProcessById((int)pid).MainModule.FileName;
+                        string exeName;
+
+                        try
+                        {
+                            exeName = Process.GetProcessById((int)pid).MainModule.FileName;
+                        }
+                        catch (System.ComponentModel.Win32Exception)
+                        {
+                            return true;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            return true;
+                        }
                         if (exeName.ToLower().EndsWith(".exe")) // Save only .exe generated window positions
                         {
                             var screen = Screen.FromHandle(hWnd);
